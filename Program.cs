@@ -2,6 +2,7 @@
 using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
 using MetadataExtractor.Formats.FileSystem;
+using Directory = MetadataExtractor.Directory;
 
 if (!ValidateArgs())
     return;
@@ -296,16 +297,17 @@ static DateTime? GetImageDateTaken(IEnumerable<MetadataExtractor.Directory> dire
 {
     // find the Exif SubIFD directory that has the date time original tag in.
     // there can be multiple directories and the tag only exists in one.
-    var exifSubIfDirectory = directories.OfType<ExifSubIfdDirectory>().FirstOrDefault(q => q.ContainsTag(ExifDirectoryBase.TagDateTimeOriginal));
+    var enumerableDirectories = directories as Directory[] ?? directories.ToArray();
+    var exifSubIfDirectory = enumerableDirectories.OfType<ExifSubIfdDirectory>().FirstOrDefault(q => q.ContainsTag(ExifDirectoryBase.TagDateTimeOriginal));
     
     // query the tag's value
     if (exifSubIfDirectory != null && exifSubIfDirectory.TryGetDateTime(ExifDirectoryBase.TagDateTimeOriginal, out var dateTime))
         return dateTime;    
 
     // okay, we haven't got the preferred tag, what about others?
-    var fileMetadataDirectory = directories.OfType<FileMetadataDirectory>().FirstOrDefault(q => q.ContainsTag(FileMetadataDirectory.TagFileModifiedDate));
+    var fileMetadataDirectory = enumerableDirectories.OfType<FileMetadataDirectory>().FirstOrDefault(q => q.ContainsTag(FileMetadataDirectory.TagFileModifiedDate));
     if (fileMetadataDirectory != null && fileMetadataDirectory.TryGetDateTime(FileMetadataDirectory.TagFileModifiedDate, out var modifiedDate))
-        return modifiedDate;   
+        return modifiedDate;
 
     return null;
 }
