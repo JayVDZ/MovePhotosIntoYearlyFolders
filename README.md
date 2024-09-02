@@ -1,12 +1,12 @@
 # MovePhotosIntoYearlyFolders
-A command-line tool that analyses photo capture time and moves photos into folders for the year they were taken.
+A command-line tool that analyses photo capture time and moves photos into folders for the year they were taken, i.e. `c:\output\2004`, `c:\output\2006`, etc. Useful for bringing order to huge photo archives.
 
 ## Arguments
-1. string: Source folder path, i.e. `"c:\my_old_path"`
-2. string: Destination folder path, i.e. `"c:\my_new_path"`
-3. optional bool: Move = true, Copy = false (default: true)
-4. optional bool: Delete empty source folder when done (default: false)
-5. optional bool: Delete any source .db files (default: false)
+1. String: Source folder path, i.e. `"c:\my_old_path"`
+2. String: Destination folder path, i.e. `"c:\my_new_path"`
+3. Optional bool: Move = true, Copy = false (default: true)
+4. Optional bool: Delete empty source folder when done (default: false)
+5. Optional bool: Delete any source .db files (default: false)
 
 ## Example
 Open a command prompt and CD to the program location.
