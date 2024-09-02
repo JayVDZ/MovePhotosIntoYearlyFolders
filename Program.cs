@@ -1,4 +1,5 @@
-﻿using MetadataExtractor;
+﻿using System.Text.RegularExpressions;
+using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
 
 if (!ValidateArgs())
@@ -27,7 +28,7 @@ var fileSize = new FileSize(BytesMovedOrCopied);
 Console.WriteLine("Stats:");
 Console.WriteLine("\tFiles Moved Or Copied: " + FilesMovedOrCopied);
 Console.WriteLine("\tFiles Moved Or Copied By Capture Time: " + FilesMovedOrCopiedByCaptureTime);
-Console.WriteLine("\tFiles Moved Or Copied By Creation Time: " + FilesMovedOrCopiedByFileCreationTime);
+Console.WriteLine("\tFiles Moved Or Copied By Inference: " + FilesMovedOrCopiedByInference);
 Console.WriteLine($"\tBytes Moved Or Copied: {Math.Round(fileSize.TeraBytes)} TB / {Math.Round(fileSize.GigaBytes)} GB / {Math.Round(fileSize.MegaBytes)} MB / {Math.Round(fileSize.KilaBytes)} KB");
 Console.WriteLine("\tFiles skipped: " + FilesSkipped);
 Console.WriteLine("\tSource Folders Deleted: " + SourceFoldersDeleted);
@@ -44,8 +45,9 @@ bool ValidateArgs()
         Console.WriteLine("1: string: Source folder path, i.e. \"c:\\my_old_path\"");
         Console.WriteLine("2: string: Destination folder path, i.e. \"c:\\my_new_path\"");
         Console.WriteLine("3: optional bool: Move = true, Copy = false (default: true)");
-        Console.WriteLine("4: optional bool: Delete empty source folder when done (default: false)");
-        Console.WriteLine("5: optional bool: Delete .db files (default: false)");
+        Console.WriteLine("4: optional bool: Delete empty source folder when done? (default: false)");
+        Console.WriteLine("5: optional bool: Delete .db files? (default: false)");
+        Console.WriteLine("6: optional bool: Attempt to determine photo year when there's no metadata? (default: true)");
         Console.ResetColor();
         return false;
     }
@@ -74,7 +76,7 @@ bool ValidateArgs()
         if (!bool.TryParse(args[2], out var moveOrCopy))
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("Third argument (bool: Move = true, Copy = false) could not be parsed.");
+            Console.WriteLine("Third argument: Move = true, Copy = false) could not be parsed.");
             Console.ResetColor();
             return false;
         }
@@ -86,7 +88,7 @@ bool ValidateArgs()
         if (!bool.TryParse(args[3], out var deleteEmptySourceFolder))
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("Fourth argument (bool: Delete empty source folder when done) could not be parsed.");
+            Console.WriteLine("Fourth argument: Delete empty source folder when done) could not be parsed.");
             Console.ResetColor();
             return false;
         }
@@ -98,11 +100,23 @@ bool ValidateArgs()
         if (!bool.TryParse(args[4], out var deleteDbFiles))
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("Firth argument (bool: Delete .db files could not be parsed.");
+            Console.WriteLine("Firth argument: Delete .db files could not be parsed.");
             Console.ResetColor();
             return false;
         }
         DeleteDbFiles = deleteDbFiles;
+    }
+    
+    if (args.Length >= 6)
+    {
+        if (!bool.TryParse(args[5], out var attemptNoMetadataYearDetermination))
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("Sixth argument: Attempt to determine photo year when there's no metadata? Could not be parsed.");
+            Console.ResetColor();
+            return false;
+        }
+        AttemptNoMetadataYearDetermination = attemptNoMetadataYearDetermination;
     }
 
     // all arguments check out
@@ -117,6 +131,7 @@ bool CheckArgumentsWithUser()
     Console.WriteLine("\tMove or Copy? " + (MoveOrCopy ? "Move" : "Copy"));
     Console.WriteLine("\tDelete empty source folder? " + DeleteEmptySourceFolder);
     Console.WriteLine("\tDelete .db files? " + DeleteDbFiles);
+    Console.WriteLine("\tAttempt to determine photo year when there's no metadata? " + AttemptNoMetadataYearDetermination);
 
     Console.ForegroundColor = ConsoleColor.Cyan;
     Console.WriteLine("Is this right? [y/n]");
@@ -139,9 +154,8 @@ void EnumerateFiles(string path)
     
     foreach (var filePath in System.IO.Directory.EnumerateFiles(path))
     {
-        int year;
+        int? year;
         var fileInfo = new FileInfo(filePath);
-
         IReadOnlyList<MetadataExtractor.Directory> fileMetadata;
         try
         {
@@ -164,12 +178,27 @@ void EnumerateFiles(string path)
         }
         else
         {
-            // fall back to using the last time the file was written, which seems to be the next best way to determine the age of the photo
-            year = fileInfo.LastWriteTimeUtc.Year;
-            FilesMovedOrCopiedByFileCreationTime++;
+            if (!AttemptNoMetadataYearDetermination)
+            {
+                Console.WriteLine($"Skipping: {filePath} as there is no metadata and params don't allow inference.");
+                FilesSkipped++;
+                continue;
+            }
+
+            year = InferPhotoYear(filePath, fileInfo);
+            if (year.HasValue)
+            {
+                FilesMovedOrCopiedByInference++;    
+            }
+            else
+            {
+                Console.WriteLine($"Skipping: {filePath} as the photo's year of capture could not be determined as there's no metadata and it couldn't be inferred.");
+                FilesSkipped++;
+                continue;
+            }
         }
 
-        var yearlyDestinationPath = Path.Combine(DestinationPath, year.ToString());
+        var yearlyDestinationPath = Path.Combine(DestinationPath, year.ToString() ?? throw new InvalidOperationException("year is null"));
         if (!System.IO.Directory.Exists(yearlyDestinationPath))
             System.IO.Directory.CreateDirectory(yearlyDestinationPath);
         
@@ -232,6 +261,36 @@ void EnumerateFiles(string path)
     }
 }
 
+// there's no metadata, try to work out the photo capture date another way
+static int? InferPhotoYear(string path, FileInfo fileInfo)
+{
+    int? year = null;
+    
+    // can we extract the year from the filename?
+    // i.e. IMG_20150703_200006_1.JPG
+    var imgMatch = Regex.Match(path, "IMG_(\\d*)_");
+    if (imgMatch.Success)
+    {
+        var date = imgMatch.Groups[1].Value;
+        year = int.Parse(date[..4]);
+    }
+
+    if (!year.HasValue)
+    {
+        // i.e. 2011-11-03 18.02.38.jpg
+        var yearMatch = Regex.Match(path, "(\\d{4})-(\\d{2})-(\\d{2}).*");
+        if (yearMatch.Success)
+            year = int.Parse(yearMatch.Groups[1].Value);
+    }
+
+    if (!year.HasValue)
+    {
+        // fall back to using the last time the file was written, which seems to be the next best way to determine the age of the photo
+        year = fileInfo.LastWriteTimeUtc.Year;    
+    }
+    return year;
+}
+
 static DateTime? GetImageDateTaken(IEnumerable<MetadataExtractor.Directory> directories)
 {
     // obtain the Exif SubIFD directory
@@ -255,11 +314,18 @@ internal partial class Program
     private static bool MoveOrCopy { get; set; } = true; // default is to move
     private static bool DeleteEmptySourceFolder { get; set; } = false;
     private static bool DeleteDbFiles { get; set; } = false; // causes .db files to be deleted when encountered
+    private static bool AttemptNoMetadataYearDetermination { get; set; } = true;
     private static int FilesMovedOrCopied { get; set; }
     private static long BytesMovedOrCopied { get; set; }
     private static int FilesMovedOrCopiedByCaptureTime { get; set; }
-    private static int FilesMovedOrCopiedByFileCreationTime { get; set; }
+    private static int FilesMovedOrCopiedByInference { get; set; }
     private static int FilesSkipped { get; set; }
     private static int SourceFoldersDeleted { get; set; }
     private static int DbFilesDeleted { get; set; }
+}
+
+partial class Program
+{
+    [GeneratedRegex("IMG_(\\d*)_")]
+    private static partial Regex MyRegex();
 }
