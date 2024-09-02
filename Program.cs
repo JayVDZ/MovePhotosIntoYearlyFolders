@@ -1,6 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
+using MetadataExtractor.Formats.FileSystem;
 
 if (!ValidateArgs())
     return;
@@ -268,7 +269,7 @@ static int? InferPhotoYear(string path, FileInfo fileInfo)
     
     // can we extract the year from the filename?
     // i.e. IMG_20150703_200006_1.JPG
-    var imgMatch = Regex.Match(path, "IMG_(\\d*)_");
+    var imgMatch = RegexImg().Match(path);
     if (imgMatch.Success)
     {
         var date = imgMatch.Groups[1].Value;
@@ -278,7 +279,7 @@ static int? InferPhotoYear(string path, FileInfo fileInfo)
     if (!year.HasValue)
     {
         // i.e. 2011-11-03 18.02.38.jpg
-        var yearMatch = Regex.Match(path, "(\\d{4})-(\\d{2})-(\\d{2}).*");
+        var yearMatch = RegexFirstFourDigits().Match(path);
         if (yearMatch.Success)
             year = int.Parse(yearMatch.Groups[1].Value);
     }
@@ -293,14 +294,18 @@ static int? InferPhotoYear(string path, FileInfo fileInfo)
 
 static DateTime? GetImageDateTaken(IEnumerable<MetadataExtractor.Directory> directories)
 {
-    // obtain the Exif SubIFD directory
-    var directory = directories.OfType<ExifSubIfdDirectory>().FirstOrDefault(q=>q.ContainsTag(ExifDirectoryBase.TagDateTimeOriginal));
-    if (directory == null)
-        return null;
-
+    // find the Exif SubIFD directory that has the date time original tag in.
+    // there can be multiple directories and the tag only exists in one.
+    var exifSubIfDirectory = directories.OfType<ExifSubIfdDirectory>().FirstOrDefault(q => q.ContainsTag(ExifDirectoryBase.TagDateTimeOriginal));
+    
     // query the tag's value
-    if (directory.TryGetDateTime(ExifDirectoryBase.TagDateTimeOriginal, out var dateTime))
-        return dateTime;
+    if (exifSubIfDirectory != null && exifSubIfDirectory.TryGetDateTime(ExifDirectoryBase.TagDateTimeOriginal, out var dateTime))
+        return dateTime;    
+
+    // okay, we haven't got the preferred tag, what about others?
+    var fileMetadataDirectory = directories.OfType<FileMetadataDirectory>().FirstOrDefault(q => q.ContainsTag(FileMetadataDirectory.TagFileModifiedDate));
+    if (fileMetadataDirectory != null && fileMetadataDirectory.TryGetDateTime(FileMetadataDirectory.TagFileModifiedDate, out var modifiedDate))
+        return modifiedDate;   
 
     return null;
 }
@@ -322,10 +327,10 @@ internal partial class Program
     private static int FilesSkipped { get; set; }
     private static int SourceFoldersDeleted { get; set; }
     private static int DbFilesDeleted { get; set; }
-}
-
-partial class Program
-{
+    
     [GeneratedRegex("IMG_(\\d*)_")]
-    private static partial Regex MyRegex();
+    private static partial Regex RegexImg();
+
+    [GeneratedRegex("(\\d{4})-(\\d{2})-(\\d{2}).*")]
+    private static partial Regex RegexFirstFourDigits();
 }
