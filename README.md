@@ -1,5 +1,5 @@
 # MovePhotosIntoYearlyFolders
-A tool that analyses photo capture time and moves photos into folders for the year they were taken.
+A command-line tool that analyses photo capture time and moves photos into folders for the year they were taken.
 
 ## Arguments
 1. string: Source folder path, i.e. `"c:\my_old_path"`
