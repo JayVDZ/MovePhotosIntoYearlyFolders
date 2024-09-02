@@ -12,7 +12,7 @@ A command-line tool that analyses capture time from photos and videos and moves 
 ## Example
 Open a command prompt and CD to the program location.
 
-`.\MovePhotosIntoYearlyFolders.exe "C:\Temp\SourceFolder" "C:\Temp\DestinationFolder" true true true`
+`.\MovePhotosIntoYearlyFolders.exe "C:\Temp\SourceFolder" "C:\Temp\DestinationFolder" true true true false`
 
 ## References
 Uses https://www.nuget.org/packages/MetadataExtractor to determine what the capture photo dates are.
