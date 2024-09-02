@@ -294,7 +294,7 @@ static int? InferPhotoYear(string path, FileInfo fileInfo)
 static DateTime? GetImageDateTaken(IEnumerable<MetadataExtractor.Directory> directories)
 {
     // obtain the Exif SubIFD directory
-    var directory = directories.OfType<ExifSubIfdDirectory>().FirstOrDefault();
+    var directory = directories.OfType<ExifSubIfdDirectory>().FirstOrDefault(q=>q.ContainsTag(ExifDirectoryBase.TagDateTimeOriginal));
     if (directory == null)
         return null;
 
