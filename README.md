@@ -6,6 +6,7 @@ A tool that analyses photo capture time and moves photos into folders for the ye
 2. string: Destination folder path, i.e. `"c:\my_new_path"`
 3. optional bool: Move = true, Copy = false (default: true)
 4. optional bool: Delete empty source folder when done (default: false)
+5. optional bool: Delete any source .db files
 
 ## Example
 Open a command prompt and CD to the program location.
