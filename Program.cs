@@ -2,7 +2,6 @@
 using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
 using MetadataExtractor.Formats.FileSystem;
-using Directory = MetadataExtractor.Directory;
 
 if (!ValidateArgs())
     return;
@@ -229,12 +228,12 @@ void EnumerateFiles(string path)
         if (MoveOrCopy)
         {
             File.Move(filePath, newFilePath);
-            Console.WriteLine("Moved file: " + Path.GetFileName(newFilePath));
+            Console.WriteLine($"Moved file: {Path.GetFileName(newFilePath)} to {year}");
         }
         else
         {
             File.Copy(filePath, newFilePath);
-            Console.WriteLine("Copied file: " + Path.GetFileName(newFilePath));
+            Console.WriteLine($"Copied file: {Path.GetFileName(newFilePath)} to {year}");
         }
 
         FilesMovedOrCopied++;
@@ -297,7 +296,7 @@ static DateTime? GetImageDateTaken(IEnumerable<MetadataExtractor.Directory> dire
 {
     // find the Exif SubIFD directory that has the date time original tag in.
     // there can be multiple directories and the tag only exists in one.
-    var enumerableDirectories = directories as Directory[] ?? directories.ToArray();
+    var enumerableDirectories = directories as MetadataExtractor.Directory[] ?? directories.ToArray();
     var exifSubIfDirectory = enumerableDirectories.OfType<ExifSubIfdDirectory>().FirstOrDefault(q => q.ContainsTag(ExifDirectoryBase.TagDateTimeOriginal));
     
     // query the tag's value
