@@ -176,7 +176,7 @@ void EnumerateFiles(string path)
         catch (ImageProcessingException)
         {
             // either this isn't a photo, or the file is corrupt
-            Console.WriteLine($"Skipping: {path}");
+            Console.WriteLine($"Skipped file: Unable to inspect {path}");
             FilesSkipped++;
             continue;
         }
@@ -191,7 +191,7 @@ void EnumerateFiles(string path)
         {
             if (!AttemptNoMetadataYearDetermination)
             {
-                Console.WriteLine($"Skipping: {sourceFilePath} as there is no metadata and params don't allow inference.");
+                Console.WriteLine($"Skipped file: {sourceFilePath} as there is no metadata and params don't allow inference.");
                 FilesSkipped++;
                 continue;
             }
@@ -203,7 +203,7 @@ void EnumerateFiles(string path)
             }
             else
             {
-                Console.WriteLine($"Skipping: {sourceFilePath} as the photo's year of capture could not be determined as there's no metadata and it couldn't be inferred.");
+                Console.WriteLine($"Skipped file: {sourceFilePath} as the photo's year of capture could not be determined as there's no metadata and it couldn't be inferred.");
                 FilesSkipped++;
                 continue;
             }
@@ -249,12 +249,12 @@ void EnumerateFiles(string path)
         if (MoveOrCopy)
         {
             File.Move(sourceFilePath, destinationFilePath);
-            Console.WriteLine($"Moved file: {destinationFilename} to {year}");
+            Console.WriteLine($"Moved file: {sourceFilePath} to {destinationFilePath}");
         }
         else
         {
             File.Copy(sourceFilePath, destinationFilePath);
-            Console.WriteLine($"Copied file: {destinationFilename} to {year}");
+            Console.WriteLine($"Copied file: {sourceFilePath} to {destinationFilePath}");
         }
         
         switch (dateMethod)
@@ -291,11 +291,11 @@ void EnumerateFiles(string path)
             {
                 System.IO.Directory.Delete(subFolder);
                 SourceFoldersDeleted++;
-                Console.WriteLine("Deleted empty source folder: " + subFolder);
+                Console.WriteLine("Deleted empty source sub-folder: " + subFolder);
             }
             catch (IOException)
             {
-                Console.WriteLine($"Error encountered trying to delete sub folder ({subFolder}). Skipping.");
+                Console.WriteLine($"Skipped deleting source sub-folder: {subFolder}. Error encountered.");
             }    
         }
     }
