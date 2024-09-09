@@ -143,7 +143,9 @@ bool CheckArgumentsWithUser()
 
 void EnumerateFiles(string path)
 {
-    if (DeleteRedundantFiles)
+    // do we have any files in the source folder we want to delete, i.e. ones that aren't relevant anymore?
+    // this only applies to Move (not Copy) where we are making changes to the source folder.
+    if (DeleteRedundantFiles && MoveOrCopy)
     {
         foreach (var dbFile in System.IO.Directory.GetFiles(path, "*.db"))
         {
