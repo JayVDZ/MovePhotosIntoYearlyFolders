@@ -6,7 +6,7 @@ A command-line tool that analyses capture time from photos and videos and moves 
 2. String: Destination folder path, i.e. `"c:\my_new_path"`
 3. Optional bool: Move = true, Copy = false (default: true)
 4. Optional bool: Delete empty source folder when done (default: false)
-5. Optional bool: Delete any source .db files (default: false)
+5. Optional bool: Delete any redundant files (.db/.xmp) (default: false)
 6. Optional bool: Attempt to determine photo year when there's no metadata (default: true)
 
 ## Example
