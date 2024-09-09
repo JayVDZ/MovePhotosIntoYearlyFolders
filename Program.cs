@@ -279,19 +279,24 @@ void EnumerateFiles(string path)
     {
         EnumerateFiles(subFolder);
 
-        // is sub folder empty now?
-        var fileCount = System.IO.Directory.GetFiles(subFolder).Length;
-        if (!DeleteEmptySourceFolder || fileCount > 0) continue;
+        // only delete sub-folders if we're told to in a Move configuration (if Copy, we must leave source alone)
+        if (MoveOrCopy && DeleteEmptySourceFolder)
+        {
+            // is sub folder empty now?
+            var fileCount = System.IO.Directory.GetFiles(subFolder).Length;
+            if (fileCount > 0) 
+                continue;
 
-        try
-        {
-            System.IO.Directory.Delete(subFolder);
-            SourceFoldersDeleted++;
-            Console.WriteLine("Deleted empty source folder: " + subFolder);
-        }
-        catch (IOException)
-        {
-            Console.WriteLine($"Error encountered trying to delete sub folder ({subFolder}). Skipping.");
+            try
+            {
+                System.IO.Directory.Delete(subFolder);
+                SourceFoldersDeleted++;
+                Console.WriteLine("Deleted empty source folder: " + subFolder);
+            }
+            catch (IOException)
+            {
+                Console.WriteLine($"Error encountered trying to delete sub folder ({subFolder}). Skipping.");
+            }    
         }
     }
 }
