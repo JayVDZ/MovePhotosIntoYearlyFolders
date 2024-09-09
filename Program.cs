@@ -33,7 +33,7 @@ Console.WriteLine("\tFiles Moved Or Copied By Inference: " + FilesMovedOrCopiedB
 Console.WriteLine($"\tBytes Moved Or Copied: {Math.Round(fileSize.TeraBytes)} TB / {Math.Round(fileSize.GigaBytes)} GB / {Math.Round(fileSize.MegaBytes)} MB / {Math.Round(fileSize.KilaBytes)} KB");
 Console.WriteLine("\tFiles skipped: " + FilesSkipped);
 Console.WriteLine("\tSource Folders Deleted: " + SourceFoldersDeleted);
-Console.WriteLine("\t.db Files Deleted: " + DbFilesDeleted);
+Console.WriteLine("\t.db Files Deleted: " + RedundantFilesDeleted);
 return;
 
 bool ValidateArgs()
@@ -47,7 +47,7 @@ bool ValidateArgs()
         Console.WriteLine("2: string: Destination folder path, i.e. \"c:\\my_new_path\"");
         Console.WriteLine("3: optional bool: Move = true, Copy = false (default: true)");
         Console.WriteLine("4: optional bool: Delete empty source folder when done? (default: false)");
-        Console.WriteLine("5: optional bool: Delete .db files? (default: false)");
+        Console.WriteLine("5: optional bool: Delete .db and .xmp files? (default: false)");
         Console.WriteLine("6: optional bool: Attempt to determine photo year when there's no metadata? (default: true)");
         Console.ResetColor();
         return false;
@@ -98,14 +98,14 @@ bool ValidateArgs()
     
     if (args.Length >= 5)
     {
-        if (!bool.TryParse(args[4], out var deleteDbFiles))
+        if (!bool.TryParse(args[4], out var deleteRedundantFiles))
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("Firth argument: Delete .db files could not be parsed.");
+            Console.WriteLine("Fifth argument: Delete .db and .xmp files could not be parsed.");
             Console.ResetColor();
             return false;
         }
-        DeleteDbFiles = deleteDbFiles;
+        DeleteRedundantFiles = deleteRedundantFiles;
     }
     
     if (args.Length >= 6)
@@ -131,7 +131,7 @@ bool CheckArgumentsWithUser()
     Console.WriteLine("\tDestination folder: " + DestinationPath);
     Console.WriteLine("\tMove or Copy? " + (MoveOrCopy ? "Move" : "Copy"));
     Console.WriteLine("\tDelete empty source folder? " + DeleteEmptySourceFolder);
-    Console.WriteLine("\tDelete .db files? " + DeleteDbFiles);
+    Console.WriteLine("\tDelete .db and .xmp files? " + DeleteRedundantFiles);
     Console.WriteLine("\tAttempt to determine photo year when there's no metadata? " + AttemptNoMetadataYearDetermination);
 
     Console.ForegroundColor = ConsoleColor.Cyan;
@@ -143,12 +143,19 @@ bool CheckArgumentsWithUser()
 
 void EnumerateFiles(string path)
 {
-    if (DeleteDbFiles)
+    if (DeleteRedundantFiles)
     {
         foreach (var dbFile in System.IO.Directory.GetFiles(path, "*.db"))
         {
             File.Delete(dbFile);
-            DbFilesDeleted++;
+            RedundantFilesDeleted++;
+            Console.WriteLine("Deleted: " +  dbFile);
+        }
+        
+        foreach (var dbFile in System.IO.Directory.GetFiles(path, "*.xmp"))
+        {
+            File.Delete(dbFile);
+            RedundantFilesDeleted++;
             Console.WriteLine("Deleted: " +  dbFile);
         }
     }
@@ -318,8 +325,8 @@ internal partial class Program
     private static string SourcePath { get; set; } = null!;
     private static string DestinationPath { get; set; } = null!;
     private static bool MoveOrCopy { get; set; } = true; // default is to move
-    private static bool DeleteEmptySourceFolder { get; set; } = false;
-    private static bool DeleteDbFiles { get; set; } = false; // causes .db files to be deleted when encountered
+    private static bool DeleteEmptySourceFolder { get; set; }
+    private static bool DeleteRedundantFiles { get; set; } // causes .db and .xmp files to be deleted when encountered
     private static bool AttemptNoMetadataYearDetermination { get; set; } = true;
     private static int FilesMovedOrCopied { get; set; }
     private static long BytesMovedOrCopied { get; set; }
@@ -327,7 +334,7 @@ internal partial class Program
     private static int FilesMovedOrCopiedByInference { get; set; }
     private static int FilesSkipped { get; set; }
     private static int SourceFoldersDeleted { get; set; }
-    private static int DbFilesDeleted { get; set; }
+    private static int RedundantFilesDeleted { get; set; }
     
     [GeneratedRegex("IMG_(\\d*)_")]
     private static partial Regex RegexImg();
