@@ -29,6 +29,7 @@ var fileSize = new FileSize(BytesMovedOrCopied);
 Console.WriteLine("Stats:");
 Console.WriteLine("\tFiles Moved Or Copied: " + FilesMovedOrCopied);
 Console.WriteLine("\tFiles Moved Or Copied By Capture Time: " + FilesMovedOrCopiedByCaptureTime);
+Console.WriteLine("\tFiles Moved Or Copied By File Modified Date: " + FilesMovedOrCopiedByFileModifiedDate);
 Console.WriteLine("\tFiles Moved Or Copied By Inference: " + FilesMovedOrCopiedByInference);
 Console.WriteLine($"\tBytes Moved Or Copied: {Math.Round(fileSize.TeraBytes)} TB / {Math.Round(fileSize.GigaBytes)} GB / {Math.Round(fileSize.MegaBytes)} MB / {Math.Round(fileSize.KilaBytes)} KB");
 Console.WriteLine("\tFiles skipped: " + FilesSkipped);
@@ -162,14 +163,15 @@ void EnumerateFiles(string path)
         }
     }
     
-    foreach (var filePath in System.IO.Directory.EnumerateFiles(path))
+    foreach (var sourceFilePath in System.IO.Directory.EnumerateFiles(path))
     {
         int? year;
-        var fileInfo = new FileInfo(filePath);
+        var sourceFileInfo = new FileInfo(sourceFilePath);
         IReadOnlyList<MetadataExtractor.Directory> fileMetadata;
+        
         try
         {
-            fileMetadata = ImageMetadataReader.ReadMetadata(filePath);
+            fileMetadata = ImageMetadataReader.ReadMetadata(sourceFilePath);
         }
         catch (ImageProcessingException)
         {
@@ -179,30 +181,29 @@ void EnumerateFiles(string path)
             continue;
         }
         
-        var dateTaken = GetImageDateTaken(fileMetadata);
-        var sourceFileBytes = fileInfo.Length;
+        var dateTaken = GetImageDateTaken(fileMetadata, out var dateMethod);
+        var sourceFileBytes = sourceFileInfo.Length;
         if (dateTaken.HasValue)
         {
             year = dateTaken.Value.Year;
-            FilesMovedOrCopiedByCaptureTime++;
         }
         else
         {
             if (!AttemptNoMetadataYearDetermination)
             {
-                Console.WriteLine($"Skipping: {filePath} as there is no metadata and params don't allow inference.");
+                Console.WriteLine($"Skipping: {sourceFilePath} as there is no metadata and params don't allow inference.");
                 FilesSkipped++;
                 continue;
             }
 
-            year = InferPhotoYear(filePath, fileInfo);
+            year = InferPhotoYear(sourceFilePath, sourceFileInfo);
             if (year.HasValue)
             {
-                FilesMovedOrCopiedByInference++;    
+                dateMethod = DateMethod.Inference;
             }
             else
             {
-                Console.WriteLine($"Skipping: {filePath} as the photo's year of capture could not be determined as there's no metadata and it couldn't be inferred.");
+                Console.WriteLine($"Skipping: {sourceFilePath} as the photo's year of capture could not be determined as there's no metadata and it couldn't be inferred.");
                 FilesSkipped++;
                 continue;
             }
@@ -213,36 +214,60 @@ void EnumerateFiles(string path)
             System.IO.Directory.CreateDirectory(yearlyDestinationPath);
         
         // determine the new file path
-        var newFilePath = Path.Combine(yearlyDestinationPath, Path.GetFileName(filePath));
+        var destinationFilePath = Path.Combine(yearlyDestinationPath, Path.GetFileName(sourceFilePath));
+        var destinationFilename = Path.GetFileName(destinationFilePath);
         
         // make sure the new file path is unique
-        var newFilePathIsUnique = !File.Exists(newFilePath);
-        if (!newFilePathIsUnique)
+        var destinationFilePathIsUnique = !File.Exists(destinationFilePath);
+        if (!destinationFilePathIsUnique)
         {
-            var instance = 2;
-            while (!newFilePathIsUnique)
+            // are both files the same size and name? this suggests they're a duplicate. do not process.
+            var destinationFileInfo = new FileInfo(destinationFilePath);
+            if (destinationFileInfo.Length == sourceFileInfo.Length)
             {
-                var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(newFilePath);
+                // stop processing this file and move on to the next
+                Console.WriteLine($"Skipped {destinationFilename} ({year}) as it seems to be a duplicate.");
+                FilesSkipped++;
+                continue;
+            }
+            
+            var instance = 2;
+            while (!destinationFilePathIsUnique)
+            {
+                var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(destinationFilePath);
                 fileNameWithoutExtension = $"{fileNameWithoutExtension}_{instance}";
-                var newFilename = fileNameWithoutExtension + "." + Path.GetExtension(newFilePath);
-                newFilePath = Path.Combine(yearlyDestinationPath, newFilename);
+                var newFilename = fileNameWithoutExtension + "." + Path.GetExtension(destinationFilePath);
+                destinationFilePath = Path.Combine(yearlyDestinationPath, newFilename);
 
-                if (Path.Exists(newFilePath))
+                if (Path.Exists(destinationFilePath))
                     instance++;
                 else
-                    newFilePathIsUnique = true;
+                    destinationFilePathIsUnique = true;
             }    
         }
 
         if (MoveOrCopy)
         {
-            File.Move(filePath, newFilePath);
-            Console.WriteLine($"Moved file: {Path.GetFileName(newFilePath)} to {year}");
+            File.Move(sourceFilePath, destinationFilePath);
+            Console.WriteLine($"Moved file: {destinationFilename} to {year}");
         }
         else
         {
-            File.Copy(filePath, newFilePath);
-            Console.WriteLine($"Copied file: {Path.GetFileName(newFilePath)} to {year}");
+            File.Copy(sourceFilePath, destinationFilePath);
+            Console.WriteLine($"Copied file: {destinationFilename} to {year}");
+        }
+        
+        switch (dateMethod)
+        {
+            case DateMethod.CaptureTime:
+                FilesMovedOrCopiedByCaptureTime++;
+                break;
+            case DateMethod.FileModifiedDate:
+                FilesMovedOrCopiedByFileModifiedDate++;
+                break;
+            case DateMethod.Inference:
+                FilesMovedOrCopiedByInference++;
+                break;
         }
 
         FilesMovedOrCopied++;
@@ -301,7 +326,7 @@ static int? InferPhotoYear(string path, FileInfo fileInfo)
     return year;
 }
 
-static DateTime? GetImageDateTaken(IEnumerable<MetadataExtractor.Directory> directories)
+static DateTime? GetImageDateTaken(IEnumerable<MetadataExtractor.Directory> directories, out Program.DateMethod dateMethod)
 {
     // find the Exif SubIFD directory that has the date time original tag in.
     // there can be multiple directories and the tag only exists in one.
@@ -310,13 +335,20 @@ static DateTime? GetImageDateTaken(IEnumerable<MetadataExtractor.Directory> dire
     
     // query the tag's value
     if (exifSubIfDirectory != null && exifSubIfDirectory.TryGetDateTime(ExifDirectoryBase.TagDateTimeOriginal, out var dateTime))
-        return dateTime;    
+    {
+        dateMethod = DateMethod.CaptureTime;
+        return dateTime;
+    }
 
     // okay, we haven't got the preferred tag, what about others?
     var fileMetadataDirectory = enumerableDirectories.OfType<FileMetadataDirectory>().FirstOrDefault(q => q.ContainsTag(FileMetadataDirectory.TagFileModifiedDate));
     if (fileMetadataDirectory != null && fileMetadataDirectory.TryGetDateTime(FileMetadataDirectory.TagFileModifiedDate, out var modifiedDate))
+    {
+        dateMethod = DateMethod.FileModifiedDate;
         return modifiedDate;
+    }
 
+    dateMethod = DateMethod.NotSet;
     return null;
 }
 
@@ -333,6 +365,7 @@ internal partial class Program
     private static int FilesMovedOrCopied { get; set; }
     private static long BytesMovedOrCopied { get; set; }
     private static int FilesMovedOrCopiedByCaptureTime { get; set; }
+    private static int FilesMovedOrCopiedByFileModifiedDate { get; set; }
     private static int FilesMovedOrCopiedByInference { get; set; }
     private static int FilesSkipped { get; set; }
     private static int SourceFoldersDeleted { get; set; }
@@ -343,4 +376,15 @@ internal partial class Program
 
     [GeneratedRegex("(\\d{4})-(\\d{2})-(\\d{2}).*")]
     private static partial Regex RegexFirstFourDigits();
+
+    /// <summary>
+    /// How was a file dated?
+    /// </summary>
+    private enum DateMethod
+    {
+        NotSet,
+        CaptureTime,
+        FileModifiedDate,
+        Inference
+    }
 }
