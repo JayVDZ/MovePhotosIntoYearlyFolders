@@ -216,6 +216,20 @@ void EnumerateFiles(string path)
         // determine the new file path
         var destinationFilePath = Path.Combine(yearlyDestinationPath, Path.GetFileName(sourceFilePath));
         
+        // does the destination file already exist? is it a duplicate?
+        if (File.Exists(destinationFilePath))
+        {
+            // are both files the same size and name? this suggests they're a duplicate. do not process.
+            var destinationFileInfo = new FileInfo(destinationFilePath);
+            if (destinationFileInfo.Length == sourceFileInfo.Length)
+            {
+                // stop processing this file and move on to the next
+                Console.WriteLine($"Skipped {sourceFilePath} ({year}) as it seems to be a duplicate.");
+                FilesSkipped++;
+                continue;
+            }
+        }
+        
         // make sure the new file path is unique
         destinationFilePath = GetUniquePath(destinationFilePath);
 
