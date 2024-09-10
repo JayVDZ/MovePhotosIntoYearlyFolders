@@ -218,33 +218,7 @@ void EnumerateFiles(string path)
         var destinationFilename = Path.GetFileName(destinationFilePath);
         
         // make sure the new file path is unique
-        var destinationFilePathIsUnique = !File.Exists(destinationFilePath);
-        if (!destinationFilePathIsUnique)
-        {
-            // are both files the same size and name? this suggests they're a duplicate. do not process.
-            var destinationFileInfo = new FileInfo(destinationFilePath);
-            if (destinationFileInfo.Length == sourceFileInfo.Length)
-            {
-                // stop processing this file and move on to the next
-                Console.WriteLine($"Skipped {destinationFilename} ({year}) as it seems to be a duplicate.");
-                FilesSkipped++;
-                continue;
-            }
-            
-            var instance = 2;
-            while (!destinationFilePathIsUnique)
-            {
-                var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(destinationFilePath);
-                fileNameWithoutExtension = $"{fileNameWithoutExtension}_{instance}";
-                var newFilename = fileNameWithoutExtension + "." + Path.GetExtension(destinationFilePath);
-                destinationFilePath = Path.Combine(yearlyDestinationPath, newFilename);
-
-                if (Path.Exists(destinationFilePath))
-                    instance++;
-                else
-                    destinationFilePathIsUnique = true;
-            }    
-        }
+        destinationFilePath = GetUniquePath(destinationFilePath);
 
         if (MoveOrCopy)
         {
@@ -357,6 +331,51 @@ static DateTime? GetImageDateTaken(IEnumerable<MetadataExtractor.Directory> dire
     return null;
 }
 
+// generates a unique path, i.e. makes sure filenames are unique.
+// does this by appending a _{n} increment to the end of the filename.
+static string GetUniquePath(string destinationPath)
+{
+    if (!File.Exists(destinationPath))
+        return destinationPath;
+    
+    var destinationPathIsUnique = false;
+    var filename = Path.GetFileName(destinationPath);
+    var path = destinationPath.Replace(filename, string.Empty);
+    var newDestinationPath = "";
+    
+    while (!destinationPathIsUnique)
+    {
+        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(filename);
+        var incrementMatch = RegexFilenameEndDigits().Match(fileNameWithoutExtension);
+        if (incrementMatch.Success)
+        {
+            // found an increment on the end of the filename, i.e. IMG_0023_2
+            var increment = int.Parse(incrementMatch.Groups[1].Value);
+            increment++;
+
+            // replace the end of the filename with the new increment
+            var incrementLength = increment.ToString().Length;
+            fileNameWithoutExtension = fileNameWithoutExtension.Substring(0, fileNameWithoutExtension.Length - incrementLength);
+            fileNameWithoutExtension += increment;
+        }
+        else
+        {
+            // no match, just add the increment to the end of the filename
+            fileNameWithoutExtension += "_2";
+        }
+
+        // construct the new whole filename
+        filename = fileNameWithoutExtension + Path.GetExtension(filename);
+        newDestinationPath = Path.Combine(path, filename);
+        
+        // is this new one unique?
+        if (!Path.Exists(newDestinationPath))
+            destinationPathIsUnique = true;
+    }
+
+    return newDestinationPath;
+}
+
 // properties need to be defined this way, and in this location.
 // ReSharper disable once UnusedType.Global
 internal partial class Program
@@ -381,6 +400,11 @@ internal partial class Program
 
     [GeneratedRegex("(\\d{4})-(\\d{2})-(\\d{2}).*")]
     private static partial Regex RegexFirstFourDigits();
+
+    // makes sure that there's at least two underscores, as we don't want to match the 0023 in IMG_0023
+    // we want to match filenames with our own iterations in, i.e. IMG_0023_2 to get the 2
+    [GeneratedRegex("_.*_(\\d+)$")]
+    private static partial Regex RegexFilenameEndDigits();
 
     /// <summary>
     /// How was a file dated?
