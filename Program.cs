@@ -215,7 +215,6 @@ void EnumerateFiles(string path)
         
         // determine the new file path
         var destinationFilePath = Path.Combine(yearlyDestinationPath, Path.GetFileName(sourceFilePath));
-        var destinationFilename = Path.GetFileName(destinationFilePath);
         
         // make sure the new file path is unique
         destinationFilePath = GetUniquePath(destinationFilePath);
